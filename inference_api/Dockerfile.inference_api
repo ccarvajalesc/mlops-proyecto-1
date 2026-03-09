@@ -1,0 +1,2 @@
+# Dockerfile for inference API
+FROM python:3.9-slim

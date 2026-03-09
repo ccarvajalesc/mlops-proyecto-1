@@ -1,0 +1,2 @@
+# Dockerfile for minio
+FROM minio/minio:RELEASE.2024-06-19T00-00-00Z

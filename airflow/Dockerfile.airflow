@@ -1,0 +1,3 @@
+# Docker for airflow
+
+FROM apache/airflow:2.7.0

@@ -1,0 +1,2 @@
+# Dockerfile for mysql_db
+FROM mysql:8.0
