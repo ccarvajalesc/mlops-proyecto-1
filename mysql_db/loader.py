@@ -1,5 +1,4 @@
 import os
-from ucimlrepo import fetch_ucirepo
 import pandas as pd
 from sqlalchemy import (
     create_engine,
@@ -10,6 +9,7 @@ from sqlalchemy import (
     Float
 )
 import time
+import requests
 
 MYSQL_CONFIG = {
     "host": os.getenv("MYSQL_HOST", "localhost"),
@@ -19,7 +19,48 @@ MYSQL_CONFIG = {
     "port": int(os.getenv("MYSQL_PORT", "3306")),
 }
 
+COLUMNS = [
+    "Elevation",
+    "Aspect",
+    "Slope",
+    "Horizontal_Distance_To_Hydrology",
+    "Vertical_Distance_To_Hydrology",
+    "Horizontal_Distance_To_Roadways",
+    "Hillshade_9am",
+    "Hillshade_Noon",
+    "Hillshade_3pm",
+    "Horizontal_Distance_To_Fire_Points",
+    "Wilderness_Area",
+    "Soil_Type",
+    "Cover_Type"
+]
+
 metadata = MetaData()
+
+def  get_data():
+
+    url = "http://localhost:8003/data"
+
+    params = {
+        "group_number": 3
+    }
+
+    response = requests.get(url, params=params)
+
+    return response.json()
+
+
+
+def api_to_dataframe(api_response):
+
+    df = pd.DataFrame(api_response["data"], columns=COLUMNS)
+
+    # convertir a numéricos donde corresponde
+    numeric_cols = COLUMNS[:10] + ["Cover_Type"]
+
+    df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric)
+
+    return df
 
 covertype_raw = Table(
     "covertype_raw",
@@ -35,6 +76,7 @@ def get_engine():
         f"{MYSQL_CONFIG['database']}"
     )
     return create_engine(url)
+
 
 
 def wait_for_db(retries=10, sleep=3):
@@ -53,20 +95,26 @@ def wait_for_db(retries=10, sleep=3):
             print(f"⏳ Waiting for DB... ({i+1}/{retries})")
             time.sleep(sleep)
 
-def load_covertype_dataset():
-    """Descarga el dataset covertype desde UCI"""
-    
-    covertype = fetch_ucirepo(id=31)
+def insert_batch(df, engine):
 
-    X = covertype.data.features
-    y = covertype.data.targets
+    df.to_sql(
+        "covertype_raw",
+        con=engine,
+        if_exists="append",
+        index=False,
+        method="multi"
+    )
 
-    df = pd.concat([X, y], axis=1)
+    print(f"Inserted {len(df)} rows")
 
-    print(f"Dataset loaded: {df.shape}")
 
-    return df
+def process_api_batch(api_response):
 
+    engine = get_engine()
+
+    df = api_to_dataframe(api_response)
+
+    insert_batch(df, engine)
 
 def clear_database():
 
@@ -78,25 +126,6 @@ def clear_database():
 
     print("✅ Tables dropped")
 
-def load_covertype():
-    """Carga el dataset covertype a MySQL"""
-
-    wait_for_db()
-
-    df = load_covertype_dataset()
-
-    engine = get_engine()
-
-    df.to_sql(
-        "covertype_raw",
-        con=engine,
-        if_exists="replace",
-        index=False,
-        method="multi",
-        chunksize=5000
-    )
-
-    print(f"✅ Loaded {len(df)} rows into covertype_raw")
 
 if __name__ == "__main__":
 
@@ -104,4 +133,8 @@ if __name__ == "__main__":
 
     clear_database()
 
-    load_covertype()
+    df = api_to_dataframe(get_data())
+
+    process_api_batch(df)
+
+    
