@@ -1,4 +1,4 @@
-api:
+api-inference:
     build:
       context: ./inference_api
       dockerfile: Dockerfile.inference_api

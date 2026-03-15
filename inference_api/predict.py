@@ -1,12 +1,15 @@
 import pandas as pd
+import joblib
 import pickle
+import boto3
+from io import BytesIO
 
 
 # ------------------------------------------------------------------------------
-# Columnas esperadas en el modelo
+# Columnas esperadas
 # ------------------------------------------------------------------------------
 
-EXPECTED_NUM_COLS = [
+NUM_COLS = [
     "Elevation",
     "Aspect",
     "Slope",
@@ -18,130 +21,114 @@ EXPECTED_NUM_COLS = [
     "Hillshade_3pm",
     "Horizontal_Distance_To_Fire_Points"
 ]
-"""
-Lista de columnas numéricas esperadas por el modelo.
-"""
 
-
-EXPECTED_CAT_COLS = [
+CAT_COLS = [
     "Soil_Type",
     "Wilderness_Area"
 ]
-"""
-Columnas categóricas que requieren OneHotEncoding.
-"""
 
-
-ALL_EXPECTED_COLS = EXPECTED_NUM_COLS + EXPECTED_CAT_COLS
-"""
-Lista completa de columnas esperadas en los datos de entrada.
-"""
+ALL_COLS = NUM_COLS + CAT_COLS
 
 
 # ------------------------------------------------------------------------------
-# Cargar modelo
+# Cargar encoder desde volumen
 # ------------------------------------------------------------------------------
 
-def load_model(filename):
+def load_encoder():
+
     """
-    Carga un modelo entrenado junto con sus componentes de preprocesamiento.
+    Carga el encoder OneHotEncoder almacenado en el volumen /encoders.
+    """
 
-    Args:
-        filename (str): Ruta al archivo pickle del modelo.
+    ohe = joblib.load("/app/encoders/ohe_encoder.joblib")
+
+    return ohe
+
+
+# ------------------------------------------------------------------------------
+# Cargar modelo desde MinIO
+# ------------------------------------------------------------------------------
+
+def load_model_from_minio(model_key):
+
+    """
+    Descarga un modelo desde MinIO y lo carga en memoria.
+
+    Parameters
+    ----------
+    model_key : str
+        Ruta del modelo dentro del bucket (ej: models/decision_tree.pkl)
 
     Returns
     -------
     tuple
-        model : modelo entrenado
-        encoders : diccionario de encoders
-        scaler : scaler utilizado durante entrenamiento (puede ser None)
-
-    Notes
-    -----
-    El archivo debe contener un diccionario con estructura:
-
-    {
-        "model": model,
-        "encoders": encoders,
-        "scaler": scaler
-    }
+        model, scaler
     """
 
-    with open(filename, "rb") as f:
-        payload = pickle.load(f)
+    s3 = boto3.client(
+        "s3",
+        endpoint_url="http://minio:9000",
+        aws_access_key_id="admin",
+        aws_secret_access_key="supersecret"
+    )
 
-    return payload["model"], payload.get("encoders"), payload.get("scaler")
+    response = s3.get_object(
+        Bucket="models-bucket",
+        Key=model_key
+    )
+
+    model_bytes = response["Body"].read()
+
+    payload = pickle.load(BytesIO(model_bytes))
+
+    model = payload["model"]
+    scaler = payload.get("scaler")
+
+    return model, scaler
 
 
 # ------------------------------------------------------------------------------
-# Predicción sobre nuevos datos
+# Predicción
 # ------------------------------------------------------------------------------
 
-def predict_new_data(df_new, model, encoders, scaler=None):
+def predict_new_data(df_new, model, scaler=None):
+
     """
-    Realiza predicciones para nuevos datos utilizando un modelo entrenado.
-
-    Aplica exactamente el mismo pipeline de preprocesamiento utilizado
-    durante el entrenamiento:
-
-    - Limpieza de valores faltantes
-    - OneHotEncoding para variables categóricas
-    - Concatenación de variables numéricas y categóricas
-    - Escalado opcional
-    - Predicción final
+    Ejecuta predicción sobre nuevos datos usando el encoder y el modelo.
 
     Parameters
     ----------
-    df_new : pandas.DataFrame
-        DataFrame con los nuevos datos para inferencia.
-
-    model :
-        Modelo entrenado (DecisionTree, SVM, KNN, etc.).
-
-    encoders : dict
-        Diccionario con el OneHotEncoder bajo la clave `"onehot"`.
-
-    scaler : object, optional
-        Scaler utilizado durante el entrenamiento (StandardScaler u otro).
+    df_new : DataFrame
+    model : modelo entrenado
+    scaler : scaler opcional
 
     Returns
     -------
-    numpy.ndarray
-        Predicciones generadas por el modelo.
+    array con predicciones
     """
 
     df_new = df_new.copy()
 
-    num_cols = EXPECTED_NUM_COLS
-    cat_cols = EXPECTED_CAT_COLS
+    # cargar encoder en cada request
+    ohe = load_encoder()
 
-    # --------------------------------------------------------------------------
-    # Verificar columnas esperadas
-    # --------------------------------------------------------------------------
 
-    missing_cols = set(ALL_EXPECTED_COLS) - set(df_new.columns)
+    # ----------------------------
+    # limpieza datos
+    # ----------------------------
 
-    if missing_cols:
-        raise ValueError(f"Faltan columnas en la entrada: {missing_cols}")
+    df_new[NUM_COLS] = df_new[NUM_COLS].fillna(df_new[NUM_COLS].median())
 
-    # --------------------------------------------------------------------------
-    # Limpieza de datos
-    # --------------------------------------------------------------------------
-
-    df_new[num_cols] = df_new[num_cols].fillna(df_new[num_cols].median())
-
-    for col in cat_cols:
+    for col in CAT_COLS:
         df_new[col] = df_new[col].fillna("Unknown")
 
-    # --------------------------------------------------------------------------
-    # Aplicar OneHotEncoder
-    # --------------------------------------------------------------------------
+    # ----------------------------
+    # one hot encoding
+    # ----------------------------
 
-    ohe = encoders["onehot"]
+    X_cat = ohe.transform(df_new[CAT_COLS])
 
-    X_cat = ohe.transform(df_new[cat_cols])
-
-    cat_feature_names = ohe.get_feature_names_out(cat_cols)
+    cat_feature_names = ohe.get_feature_names_out(CAT_COLS)
 
     X_cat_df = pd.DataFrame(
         X_cat,
@@ -149,23 +136,15 @@ def predict_new_data(df_new, model, encoders, scaler=None):
         index=df_new.index
     )
 
-    # --------------------------------------------------------------------------
-    # Concatenar variables numéricas + categóricas
-    # --------------------------------------------------------------------------
+    X_final = pd.concat([df_new[NUM_COLS], X_cat_df], axis=1)
 
-    X_final = pd.concat([df_new[num_cols], X_cat_df], axis=1)
-
-    # --------------------------------------------------------------------------
-    # Ordenar columnas igual que en entrenamiento
-    # --------------------------------------------------------------------------
-
-    ordered_cols = list(num_cols) + list(cat_feature_names)
+    ordered_cols = list(NUM_COLS) + list(cat_feature_names)
 
     X_final = X_final[ordered_cols]
 
-    # --------------------------------------------------------------------------
-    # Escalado (si aplica)
-    # --------------------------------------------------------------------------
+    # ----------------------------
+    # escalado
+    # ----------------------------
 
     if scaler is not None:
 
@@ -177,10 +156,8 @@ def predict_new_data(df_new, model, encoders, scaler=None):
             index=X_final.index
         )
 
-    # --------------------------------------------------------------------------
-    # Predicción
-    # --------------------------------------------------------------------------
+    # ----------------------------
+    # predicción
+    # ----------------------------
 
-    predictions = model.predict(X_final)
-
-    return predictions
+    return model.predict(X_final)

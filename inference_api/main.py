@@ -1,120 +1,58 @@
-"""
-CoverType Prediction API
-----------------------
-
-Servicio REST construido con FastAPI para predecir el tipo de cobertura
-forestal (Cover_Type) a partir de características geográficas.
-
-Características:
-- Permite ejecutar múltiples modelos en una sola petición
-- Modelos cargados en memoria al iniciar la aplicación
-- Validación automática de parámetros mediante Query + Enum
-- Preparado para despliegue en Docker
-
-Autor: Taller MLOps
-Versión: 1.0.0
-"""
-
 from fastapi import FastAPI, Query
-import pandas as pd
 from typing import List, Annotated
-from predict import predict_new_data, load_model
+import pandas as pd
 from enum import Enum
-import logging
 
+from predict import load_model_from_minio, predict_new_data
 
-# ------------------------------------------------------------------------------
-# Inicialización de la aplicación
-# ------------------------------------------------------------------------------
 
 app = FastAPI(
-    title="MLOPS CoverType Prediction API",
-    description="Servicio para clasificar cobertura forestal",
-    version="1.0.0",
+    title="CoverType Prediction API",
+    version="1.0"
 )
 
 
-logging.basicConfig(
-    filename="logs/app.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
-logger = logging.getLogger(__name__)
-
-
 # ------------------------------------------------------------------------------
-# Carga de modelos
+# Cargar modelos al iniciar
 # ------------------------------------------------------------------------------
 
-tree_model, tree_encoders, tree_scaler = load_model("models/decision_tree.pkl")
-knn_model, knn_encoders, knn_scaler = load_model("models/knn.pkl")
-svm_model, svm_encoders, svm_scaler = load_model("models/svm.pkl")
+tree_model, tree_scaler = load_model_from_minio("models/decision_tree.pkl")
+knn_model, knn_scaler = load_model_from_minio("models/knn.pkl")
+svm_model, svm_scaler = load_model_from_minio("models/svm.pkl")
+
 
 models_dict = {
-    "TREE": {"model": tree_model, "encoders": tree_encoders, "scaler": tree_scaler},
-    "KNN": {"model": knn_model, "encoders": knn_encoders, "scaler": knn_scaler},
-    "SVM": {"model": svm_model, "encoders": svm_encoders, "scaler": svm_scaler},
+    "TREE": {"model": tree_model, "scaler": tree_scaler},
+    "KNN": {"model": knn_model, "scaler": knn_scaler},
+    "SVM": {"model": svm_model, "scaler": svm_scaler},
 }
 
 
-# ------------------------------------------------------------------------------
-# Enumeraciones
-# ------------------------------------------------------------------------------
-
 class model_class(str, Enum):
-    """Modelos disponibles en la API."""
     TREE = "TREE"
     KNN = "KNN"
     SVM = "SVM"
 
 
-# ------------------------------------------------------------------------------
-# Endpoint de predicción
-# ------------------------------------------------------------------------------
-
-@app.post(
-    "/predict",
-    summary="Predecir tipo de cobertura forestal",
-    description="Predice Cover_Type utilizando uno o varios modelos de ML"
-)
+@app.post("/predict")
 
 async def predict(
-    models: Annotated[
-        List[model_class],
-        Query(..., description="Modelos a utilizar: TREE, KNN, SVM")
-    ],
+    models: Annotated[List[model_class], Query(...)],
 
-    Elevation: float = Query(...),
-    Aspect: float = Query(...),
-    Slope: float = Query(...),
-    Horizontal_Distance_To_Hydrology: float = Query(...),
-    Vertical_Distance_To_Hydrology: float = Query(...),
-    Horizontal_Distance_To_Roadways: float = Query(...),
-    Hillshade_9am: float = Query(...),
-    Hillshade_Noon: float = Query(...),
-    Hillshade_3pm: float = Query(...),
-    Horizontal_Distance_To_Fire_Points: float = Query(...),
+    Elevation: float,
+    Aspect: float,
+    Slope: float,
+    Horizontal_Distance_To_Hydrology: float,
+    Vertical_Distance_To_Hydrology: float,
+    Horizontal_Distance_To_Roadways: float,
+    Hillshade_9am: float,
+    Hillshade_Noon: float,
+    Hillshade_3pm: float,
+    Horizontal_Distance_To_Fire_Points: float,
 
-    Wilderness_Area: str = Query(...),
-    Soil_Type: str = Query(...)
+    Wilderness_Area: str,
+    Soil_Type: str
 ):
-    """
-    Realiza la predicción de tipo de cobertura forestal.
-
-    Permite ejecutar múltiples modelos sobre el mismo registro.
-
-    Returns
-    -------
-    dict
-
-    Ejemplo:
-
-    {
-        "TREE": [2],
-        "SVM": [2]
-    }
-    """
 
     df = pd.DataFrame([{
         "Elevation": Elevation,
@@ -131,8 +69,6 @@ async def predict(
         "Soil_Type": Soil_Type
     }])
 
-    logger.info(f"Input recibido: {df.to_json()}")
-
     response = {}
 
     for m in models:
@@ -142,12 +78,9 @@ async def predict(
         prediction = predict_new_data(
             df,
             models_dict[model_name]["model"],
-            models_dict[model_name]["encoders"],
             models_dict[model_name]["scaler"]
         )
 
         response[model_name] = prediction.tolist()
-
-    logger.info(f"Response enviado: {response}")
 
     return response
