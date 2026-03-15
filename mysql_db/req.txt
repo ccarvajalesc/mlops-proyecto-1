@@ -4,3 +4,4 @@ pandas==3.0.1
 ucimlrepo==0.0.7
 mysql-connector-python==9.6.0
 cryptography==46.0.5
+requests

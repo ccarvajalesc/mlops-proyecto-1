@@ -1,2 +1,10 @@
-# Dockerfile for mysql_db
-FROM mysql:8.0
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY req.txt .
+RUN pip install -r req.txt
+
+COPY loader.py .
+
+CMD ["python", "loader.py"]

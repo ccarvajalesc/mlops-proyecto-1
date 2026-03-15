@@ -7,6 +7,7 @@ import time
 import csv
 import os
 
+print("Lo que hay en carpeta-: ",os.listdir())
 MIN_UPDATE_TIME = 300 ## Aca pueden cambiar el tiempo minimo para cambiar bloque de información
 
 # ---------------------------

@@ -10,9 +10,10 @@ from sqlalchemy import (
 )
 import time
 import requests
+import hashlib
 
 MYSQL_CONFIG = {
-    "host": os.getenv("MYSQL_HOST", "localhost"),
+    "host": os.getenv("MYSQL_HOST", "mysql_db"),
     "user": os.getenv("MYSQL_USER", "mlops_user"),
     "password": os.getenv("MYSQL_PASSWORD", "mlops_pass"),
     "database": os.getenv("MYSQL_DB", "mlops_db"),
@@ -39,7 +40,7 @@ metadata = MetaData()
 
 def  get_data():
 
-    url = "http://localhost:8003/data"
+    url = "http://fastapi:8003/data"
 
     params = {
         "group_number": 3
@@ -78,6 +79,17 @@ def get_engine():
     return create_engine(url)
 
 
+# ⭐ UUID determinístico basado en contenido de fila
+def add_uuid(df):
+
+    def row_hash(row):
+        row_str = "|".join(row.astype(str).values)
+        return hashlib.sha256(row_str.encode()).hexdigest()
+
+    df = df.copy()
+    df["uuid"] = df.apply(row_hash, axis=1)
+
+    return df
 
 def wait_for_db(retries=10, sleep=3):
 
@@ -107,12 +119,19 @@ def insert_batch(df, engine):
 
     print(f"Inserted {len(df)} rows")
 
-
+"""
 def process_api_batch(api_response):
 
     engine = get_engine()
 
     df = api_to_dataframe(api_response)
+
+    insert_batch(df, engine)
+"""
+
+def process_api_batch(df):
+
+    engine = get_engine()
 
     insert_batch(df, engine)
 
@@ -134,6 +153,7 @@ if __name__ == "__main__":
     clear_database()
 
     df = api_to_dataframe(get_data())
+    df = add_uuid(df)
 
     process_api_batch(df)
 
