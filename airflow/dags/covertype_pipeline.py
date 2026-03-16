@@ -9,8 +9,7 @@ from sqlalchemy import create_engine
 from src.utils import preprocess_data,get_data, \
     api_to_dataframe,wait_for_db,  \
     add_uuid, insert_raw, get_pending_rows, insert_processed
-
-
+from datetime import datetime, timedelta
 
 def insert_raw_data():
 
@@ -19,7 +18,10 @@ def insert_raw_data():
     api_response = get_data()
     df = api_to_dataframe(api_response)
     df = add_uuid(df)
-    insert_raw(df)
+    try:
+        insert_raw(df)
+    except Exception as e:
+        print(f"Error inserting raw data: {e}")
 
     #process_api_batch(api_response, "covertype_processed")
 
@@ -63,11 +65,11 @@ def preprocess_data_for_training():
 with DAG(
     dag_id="covertype_pipeline",
     start_date=datetime(2024, 1, 1),
-    schedule_interval=None,
+    schedule="*/5 * * * *",
     catchup=False,
     tags=["mlops", "covertype"],
 ) as dag:
-    
+
     t1 = PythonOperator(
         task_id="insert_raw_data",
         python_callable=insert_raw_data,

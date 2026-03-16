@@ -60,8 +60,12 @@ def get_data():
 
 
 def api_to_dataframe(api_response):
-
-    df = pd.DataFrame(api_response["data"], columns=COLUMNS)
+    
+    try:
+        df = pd.DataFrame(api_response["data"], columns=COLUMNS)
+    except Exception as e:
+        print(f"Error creating DataFrame: {e}")
+        return api_response
 
     # convertir a numéricos donde corresponde
     numeric_cols = COLUMNS[:10] + ["Cover_Type"]

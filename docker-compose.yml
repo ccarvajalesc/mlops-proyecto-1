@@ -325,6 +325,7 @@ services:
 
     depends_on:
       - mysql_db
+      - get_data_api
 
     networks:
       - mlops_net
@@ -391,6 +392,7 @@ services:
       - "8001:8001"
     depends_on:
       - minio
+      - airflow-init
     environment:
       - AWS_ACCESS_KEY_ID=admin
       - AWS_SECRET_ACCESS_KEY=supersecret
@@ -399,9 +401,9 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./encoders:/app/encoders
+      - ./inference_api:/app
     networks:
       - minio-net
-      - mlops_net
 
 
 volumes:

@@ -3,6 +3,8 @@ import joblib
 import pickle
 import boto3
 from io import BytesIO
+from botocore.exceptions import ClientError
+import time
 
 
 # ------------------------------------------------------------------------------
@@ -45,11 +47,35 @@ def load_encoder():
     return ohe
 
 
+
+def safe_load(model_key, bucket="models-bucket"):
+    try:
+        return load_model_from_minio(model_key, bucket=bucket)
+
+    except ClientError as e:
+
+        error_code = e.response["Error"]["Code"]
+
+        if error_code == "NoSuchBucket":
+            print(f"⚠️ Bucket no encontrado aún → {model_key}")
+            return None, None
+
+        elif error_code == "NoSuchKey":
+            print(f"⚠️ Modelo no encontrado aún → {model_key}")
+            return None, None
+
+        else:
+            raise
+
+    except Exception as e:
+        print(f"⚠️ Error cargando {model_key}: {e}")
+        return None, None
+
 # ------------------------------------------------------------------------------
 # Cargar modelo desde MinIO
 # ------------------------------------------------------------------------------
 
-def load_model_from_minio(model_key):
+def load_model_from_minio(model_key, bucket="models-bucket"):
 
     """
     Descarga un modelo desde MinIO y lo carga en memoria.
@@ -71,6 +97,7 @@ def load_model_from_minio(model_key):
         aws_access_key_id="admin",
         aws_secret_access_key="supersecret"
     )
+    
 
     response = s3.get_object(
         Bucket="models-bucket",
