@@ -20,16 +20,7 @@ class model_class(str, Enum):
     TREE = "TREE"
     KNN = "KNN"
     SVM = "SVM"
-class WildernessEnum(str, Enum):
-    Rawah = "Rawah"
-    Neota = "Neota"
-    Comanche_Peak = "Comanche_Peak"
-    Cache_la_Poudre = "Cache_la_Poudre"
 
-class SoilEnum(str, Enum):
-    Soil_1 = "C2702"
-    Soil_2 = "Soil_2"
-    Soil_3 = "Soil_3"
 
 
 
@@ -186,14 +177,14 @@ async def predict(
 
     tree_model, tree_scaler = safe_load("models/decision_tree.pkl", bucket=bucket)
     knn_model, knn_scaler = safe_load("models/knn.pkl", bucket=bucket)
-    #svm_model, svm_scaler = safe_load("models/svm.pkl", bucket=bucket)
+    svm_model, svm_scaler = safe_load("models/svm.pkl", bucket=bucket)
 
 
 
     models_dict = {
         "TREE": {"model": tree_model, "scaler": tree_scaler},
         "KNN": {"model": knn_model, "scaler": knn_scaler},
-        #"SVM": {"model": svm_model, "scaler": svm_scaler},
+        "SVM": {"model": svm_model, "scaler": svm_scaler},
     }
 
 
