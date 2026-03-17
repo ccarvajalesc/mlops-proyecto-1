@@ -27,7 +27,7 @@ class WildernessEnum(str, Enum):
     Cache_la_Poudre = "Cache_la_Poudre"
 
 class SoilEnum(str, Enum):
-    Soil_1 = "Soil_1"
+    Soil_1 = "C2702"
     Soil_2 = "Soil_2"
     Soil_3 = "Soil_3"
 
@@ -44,21 +44,17 @@ async def predict(
         )
     ],
 
-    Wilderness_Area: Annotated[
-        WildernessEnum,
-        Query(
-            ...,
+    Wilderness_Area:str =Query(
+            "Rawah",
             description="Área silvestre a la que pertenece la celda de terreno. Corresponde a una variable categórica one-hot del dataset Covertype."
         )
-    ],
+    ,
 
-    Soil_Type: Annotated[
-        SoilEnum,
-        Query(
-            ...,
+    Soil_Type: str = Query(
+            "C2702",
             description="Tipo de suelo dominante en la celda. Variable categórica one-hot entre los 40 tipos ecológicos definidos en el dataset."
         )
-    ],
+    ,
 
     bucket: str = Query(
         "models-bucket",
@@ -190,14 +186,14 @@ async def predict(
 
     tree_model, tree_scaler = safe_load("models/decision_tree.pkl", bucket=bucket)
     knn_model, knn_scaler = safe_load("models/knn.pkl", bucket=bucket)
-    svm_model, svm_scaler = safe_load("models/svm.pkl", bucket=bucket)
+    #svm_model, svm_scaler = safe_load("models/svm.pkl", bucket=bucket)
 
 
 
     models_dict = {
         "TREE": {"model": tree_model, "scaler": tree_scaler},
         "KNN": {"model": knn_model, "scaler": knn_scaler},
-        "SVM": {"model": svm_model, "scaler": svm_scaler},
+        #"SVM": {"model": svm_model, "scaler": svm_scaler},
     }
 
 
@@ -205,8 +201,8 @@ async def predict(
 
     response = {}
 
-    if tree_model is None or knn_model is None or svm_model is None:
-        return {"error": 'Modelos no disponibles. Revise que esten subidos al bucket "{bucket}". Si "{bucket}" no existe, créelo, entrene los modelos e intente nuevamente.'}
+    if tree_model is None or knn_model is None:#or svm_model is None:
+        return {"error": f'Modelos no disponibles. Revise que esten subidos al bucket "{bucket}". Si "{bucket}" no existe, créelo, entrene los modelos e intente nuevamente.'}
     else:
 
         for m in models:

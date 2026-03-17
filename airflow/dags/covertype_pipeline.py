@@ -8,7 +8,7 @@ import time
 from sqlalchemy import create_engine
 from src.utils import preprocess_data,get_data, \
     api_to_dataframe,wait_for_db,  \
-    add_uuid, insert_raw, get_pending_rows, insert_processed
+    add_uuid, insert_raw, get_pending_rows, insert_processed, get_processed_rows
 from datetime import datetime, timedelta
 
 def insert_raw_data():
@@ -51,12 +51,13 @@ def preprocess_data_for_training():
         print("No new rows to process")
         return
 
-    df_processed, _, _, encoders = preprocess_data(pending)
+    df_processed_new, _, _, encoders = preprocess_data(pending)
+    df_processed_all, _1, _2, encoders_all = preprocess_data(get_processed_rows())
 
-    insert_processed(df_processed)
+    insert_processed(df_processed_new)
 
     import joblib
-    joblib.dump(encoders["onehot"], "encoders/ohe_encoder.joblib")
+    joblib.dump(encoders_all["onehot"], "/opt/airflow/encoders/ohe_encoder.joblib")
 
     print("Encoder saved")
 

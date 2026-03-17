@@ -196,6 +196,19 @@ def get_pending_rows():
 
     return pending
 
+def get_processed_rows():
+
+    engine = get_engine()
+
+    try:
+        no_processed = pd.read_sql_table("covertype_raw", engine)
+        print(f"Processed rows: {len(no_processed)}")
+        return no_processed
+
+    except Exception as e:
+        print(f"Error reading processed table: {e}")
+        return pd.DataFrame()
+
 
 def insert_processed(df_processed):
 

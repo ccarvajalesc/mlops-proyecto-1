@@ -399,10 +399,10 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
       - MINIO_ENDPOINT=http://minio:9000
     volumes:
-      - ./logs:/app/logs
-      - ./encoders:/app/encoders
       - ./inference_api:/app
-    networks:
+      - ./encoders:/app/encoders
+      - ./logs:/app/logs
+    networks: 
       - minio-net
 
 

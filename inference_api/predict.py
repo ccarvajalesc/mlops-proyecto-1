@@ -43,6 +43,7 @@ def load_encoder():
     """
 
     ohe = joblib.load("/app/encoders/ohe_encoder.joblib")
+    print("loaded encoder")
 
     return ohe
 
@@ -100,7 +101,7 @@ def load_model_from_minio(model_key, bucket="models-bucket"):
     
 
     response = s3.get_object(
-        Bucket="models-bucket",
+        Bucket=bucket,
         Key=model_key
     )
 
