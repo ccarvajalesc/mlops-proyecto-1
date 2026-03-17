@@ -145,3 +145,5 @@ Esto permite:
 ## 👨‍💻 Autores
 
 Proyecto desarrollado como parte del curso de **MLOps**.
+* Carlos Carvajales.
+* Mateo Ruiz.
